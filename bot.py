@@ -18,6 +18,9 @@ app = Flask(__name__)
 def home():
     return "Anti-Link Bot is running!"
 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("✅ Anti-Link Bot is working!")
+
 async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
