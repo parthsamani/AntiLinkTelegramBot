@@ -46,6 +46,8 @@ async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def run_bot():
     application = Application.builder().token(BOT_TOKEN).build()
 
+    application.add_handler(CommandHandler("start", start))
+
     application.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
