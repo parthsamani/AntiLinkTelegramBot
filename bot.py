@@ -1,47 +1,60 @@
 import os
 import re
+import threading
+from flask import Flask
 from telegram import Update
 from telegram.ext import Application, MessageHandler, ContextTypes, filters
 
-# Render Environment Variable se token lega
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# Link detect karne ke liye regex
 LINK_PATTERN = re.compile(
     r"(https?://\S+|www\.\S+|t\.me/\S+|telegram\.me/\S+|@\w+)",
     re.IGNORECASE
 )
 
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Anti-Link Bot is running!"
+
 async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
 
-    chat = update.effective_chat
-    user = update.effective_user
-
     try:
-        member = await context.bot.get_chat_member(chat.id, user.id)
+        member = await context.bot.get_chat_member(
+            update.effective_chat.id,
+            update.effective_user.id
+        )
 
-        # Owner/Admin ke messages delete nahi honge
-        if member.status in ["creator", "administrator"]:
+        # Admin aur Owner ko allow karo
+        if member.status in ["administrator", "creator"]:
             return
 
         # Link detect hua to delete karo
         if LINK_PATTERN.search(update.message.text):
             await update.message.delete()
+            print(f"Deleted link from {update.effective_user.id}")
 
     except Exception as e:
-        print(f"Error: {e}")
+        print(e)
 
-def main():
-    app = Application.builder().token(BOT_TOKEN).build()
+def run_bot():
+    application = Application.builder().token(BOT_TOKEN).build()
 
-    app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, anti_link)
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            anti_link
+        )
     )
 
     print("Anti-Link Bot Started...")
-    app.run_polling()
+    application.run_polling()
 
 if __name__ == "__main__":
-    main()
+    threading.Thread(target=run_bot).start()
+
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
