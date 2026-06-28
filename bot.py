@@ -64,11 +64,11 @@ async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         # Admin/Owner allowed
-        if member.status in [
-            "creator",
-            "administrator",
-        ]:
-            return
+        if member.status in (
+    "creator",
+    "administrator",
+):
+    return
 
         has_link = False
 
@@ -97,16 +97,17 @@ async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             has_link = True
 
         if has_link:
-            print(
-                "DELETING:",
-                update.effective_user.id,
-                text,
-            )
+    print(
+        "DELETING:",
+        update.effective_user.id,
+        text,
+    )
 
-            await update.message.delete()
+    await asyncio.sleep(0.3)
 
-            print("DELETED")
+    await update.message.delete()
 
+    print("DELETED")
     except Exception as e:
         print("ERROR:", e)
 
