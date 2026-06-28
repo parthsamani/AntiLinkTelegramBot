@@ -37,13 +37,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
+    if not update.message:
         return
 
+    text = update.message.text or update.message.caption or ""
+
     try:
-        print(
-    f"Message: {update.message.text} | User: {update.effective_user.id}"
-)
         member = await context.bot.get_chat_member(
             update.effective_chat.id,
             update.effective_user.id,
@@ -53,32 +52,52 @@ async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if member.status in ["creator", "administrator"]:
             return
 
-        # Link detect hua to delete karo
-        text = update.message.text or ""
+        has_link = False
 
-# Telegram entities check karo
-has_link = False
+        # Telegram entities check
+        if update.message.entities:
+            for entity in update.message.entities:
+                if entity.type in [
+                    "url",
+                    "text_link",
+                    "mention",
+                    "phone_number",
+                ]:
+                    has_link = True
+                    break
 
-if update.message.entities:
-    for entity in update.message.entities:
-        if entity.type in [
-            "url",
-            "text_link",
-            "mention",
-            "phone_number"
-        ]:
+        if update.message.caption_entities:
+            for entity in update.message.caption_entities:
+                if entity.type in [
+                    "url",
+                    "text_link",
+                    "mention",
+                    "phone_number",
+                ]:
+                    has_link = True
+                    break
+
+        # Regex check
+        LINK_PATTERN = re.compile(
+            r"("
+            r"https?://\S+|"
+            r"www\.\S+|"
+            r"(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}|"
+            r"t\.me/\S+|"
+            r"telegram\.me/\S+|"
+            r"wa\.me/\S+|"
+            r"bit\.ly/\S+|"
+            r"tinyurl\.com/\S+|"
+            r"@\w+"
+            r")",
+            re.IGNORECASE,
+        )
+
+        if LINK_PATTERN.search(text):
             has_link = True
-            break
 
-# Regex check
-if LINK_PATTERN.search(text):
-    has_link = True
-
-if has_link:
-    print("LINK DETECTED:", text)
-    await update.message.delete()
-    print("MESSAGE DELETED")
-            print("LINK DETECTED")
+        if has_link:
+            print("LINK DETECTED:", text)
             await update.message.delete()
             print("MESSAGE DELETED")
 
