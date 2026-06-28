@@ -16,9 +16,16 @@ RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 app = Flask(__name__)
 
 LINK_PATTERN = re.compile(
-    r"(https?://\S+|www\.\S+|t\.me/\S+|telegram\.me/\S+|@\w+)",
-    re.IGNORECASE,
-)
+    r"("
+    r"https?://\S+|"
+    r"www\.\S+|"
+    r"(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}|"
+    r"t\.me/\S+|"
+    r"telegram\.me/\S+|"
+    r"wa\.me/\S+|"
+    r"bit\.ly/\S+|"
+    r"tinyurl\.com/\S+|"
+    r"
 
 telegram_app = Application.builder().token(BOT_TOKEN).build()
 
