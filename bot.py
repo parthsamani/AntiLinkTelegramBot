@@ -69,10 +69,19 @@ async def webhook():
     return "OK"
 
 
+import asyncio
+
 if __name__ == "__main__":
-    print("Starting webhook bot...")
-    telegram_app.run_webhook(
-        listen="0.0.0.0",
-        port=int(os.environ.get("PORT", 10000)),
-        webhook_url=f"{RENDER_URL}/{BOT_TOKEN}",
-    )
+    async def setup():
+        await telegram_app.initialize()
+        await telegram_app.start()
+
+        webhook_url = f"{RENDER_URL}/{BOT_TOKEN}"
+        await telegram_app.bot.set_webhook(webhook_url)
+
+        print(f"Webhook set: {webhook_url}")
+
+    asyncio.run(setup())
+
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
