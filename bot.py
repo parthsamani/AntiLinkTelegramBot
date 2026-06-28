@@ -85,10 +85,9 @@ async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         for entity in entities:
             if entity.type in [
-                "url",
-                "text_link",
-                "mention",
-            ]:
+    "url",
+    "text_link",
+]:
                 has_link = True
                 break
 
@@ -113,19 +112,11 @@ async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ================= HANDLERS =================
 
 telegram_app.add_handler(
-    CommandHandler(
-        "start",
-        start,
-    )
-)
-
-telegram_app.add_handler(
     MessageHandler(
-        filters.ALL,
+        filters.TEXT & ~filters.COMMAND,
         anti_link,
     )
 )
-
 # ================= FLASK =================
 
 @app.route("/")
