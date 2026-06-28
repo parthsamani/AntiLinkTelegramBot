@@ -56,19 +56,21 @@ async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         or ""
     )
 
-    try:
+    # Admin check
+try:
+    member = await context.bot.get_chat_member(
+        update.effective_chat.id,
+        update.effective_user.id,
+    )
 
-        member = await context.bot.get_chat_member(
-            update.effective_chat.id,
-            update.effective_user.id,
-        )
+    if member.status in (
+        "creator",
+        "administrator",
+    ):
+        return
 
-        # Admin/Owner allowed
-        if member.status in (
-    "creator",
-    "administrator",
-):
-    return
+except Exception as e:
+    print("ADMIN CHECK ERROR:", e)
 
         has_link = False
 
