@@ -17,7 +17,16 @@ RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 app = Flask(__name__)
 
 LINK_PATTERN = re.compile(
-    r"(https?://\S+|www\.\S+|t\.me/\S+|telegram\.me/\S+|@\w+)",
+    r"(https?://[^\s]+"
+    r"|www\.[^\s]+"
+    r"|(?:[a-zA-Z0-9-]+\.)+(?:com|in|org|net|io|me|co|xyz|app|dev|info|biz|tv|cc)"
+    r"|t\.me/[^\s]+"
+    r"|telegram\.me/[^\s]+"
+    r"|wa\.me/[^\s]+"
+    r"|bit\.ly/[^\s]+"
+    r"|tinyurl\.com/[^\s]+"
+    r"|goo\.gl/[^\s]+"
+    r"|@\w+)",
     re.IGNORECASE,
 )
 
@@ -44,11 +53,26 @@ async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if member.status in ["creator", "administrator"]:
             return
 
-        # Link detect hua to delete karo
-        if LINK_PATTERN.search(update.message.text):
-            print("LINK DETECTED:", update.message.text)
-            await update.message.delete()
-            print("MESSAGE DELETED")
+# Link detect karo
+text = update.message.text or ""
+
+has_link = False
+
+# Regex check
+if LINK_PATTERN.search(text):
+    has_link = True
+
+# Telegram entities check
+if update.message.entities:
+    for entity in update.message.entities:
+        if entity.type in ["url", "text_link"]:
+            has_link = True
+            break
+
+if has_link:
+    print("LINK DETECTED:", text)
+    await update.message.delete()
+    print("MESSAGE DELETED")
 
     except Exception as e:
         print("ERROR:", e)
