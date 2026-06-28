@@ -109,8 +109,8 @@ telegram_app.add_handler(CommandHandler("start", start))
 
 telegram_app.add_handler(
     MessageHandler(
-        (filters.TEXT | filters.CAPTION) & ~filters.COMMAND,
-        anti_link,
+        filters.TEXT & ~filters.COMMAND,
+        anti_link
     )
 )
 
