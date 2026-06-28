@@ -63,10 +63,19 @@ def home():
 
 
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
-async def webhook():
-    update = Update.de_json(request.get_json(force=True), telegram_app.bot)
-    await telegram_app.process_update(update)
-    return "OK"
+def webhook():
+    import asyncio
+
+    update = Update.de_json(
+        request.get_json(force=True),
+        telegram_app.bot
+    )
+
+    asyncio.run(
+        telegram_app.process_update(update)
+    )
+
+    return "OK", 200
 
 
 import asyncio
