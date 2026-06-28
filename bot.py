@@ -103,8 +103,6 @@ async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text,
     )
 
-    await asyncio.sleep(0.3)
-
     await update.message.delete()
 
     print("DELETED")
