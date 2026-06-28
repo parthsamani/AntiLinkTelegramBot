@@ -1,5 +1,6 @@
 import os
 import re
+import asyncio
 from flask import Flask, request
 from telegram import Update
 from telegram.ext import (
@@ -30,15 +31,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("MESSAGE RECEIVED:", update.message)
-    
     if not update.message or not update.message.text:
         return
 
     try:
-        print(
-    f"Message: {update.message.text} | User: {update.effective_user.id}"
-)
         member = await context.bot.get_chat_member(
             update.effective_chat.id,
             update.effective_user.id,
@@ -49,8 +45,8 @@ async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Link detect hua to delete karo
-        print("LINK FOUND:", update.message.text):
-            print("LINK DETECTED")
+        if LINK_PATTERN.search(update.message.text):
+            print("LINK DETECTED:", update.message.text)
             await update.message.delete()
             print("MESSAGE DELETED")
 
@@ -59,8 +55,12 @@ async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 telegram_app.add_handler(CommandHandler("start", start))
+
 telegram_app.add_handler(
-    MessageHandler(filters.TEXT & ~filters.COMMAND, anti_link)
+    MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        anti_link
+    )
 )
 
 
@@ -71,8 +71,6 @@ def home():
 
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def webhook():
-    import asyncio
-
     update = Update.de_json(
         request.get_json(force=True),
         telegram_app.bot
@@ -84,8 +82,6 @@ def webhook():
 
     return "OK", 200
 
-
-import asyncio
 
 if __name__ == "__main__":
     async def setup():
