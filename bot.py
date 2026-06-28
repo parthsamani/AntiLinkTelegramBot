@@ -34,6 +34,9 @@ async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
+        print(
+    f"Message: {update.message.text} | User: {update.effective_user.id}"
+)
         member = await context.bot.get_chat_member(
             update.effective_chat.id,
             update.effective_user.id,
@@ -45,7 +48,9 @@ async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Link detect hua to delete karo
         if LINK_PATTERN.search(update.message.text):
+            print("LINK DETECTED")
             await update.message.delete()
+            print("MESSAGE DELETED")
 
     except Exception as e:
         print("ERROR:", e)
