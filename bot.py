@@ -16,71 +16,73 @@ RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 
 app = Flask(__name__)
 
+# Link detection pattern
 LINK_PATTERN = re.compile(
-    r"(https?://[^\s]+"
-    r"|www\.[^\s]+"
-    r"|(?:[a-zA-Z0-9-]+\.)+(?:com|in|org|net|io|me|co|xyz|app|dev|info|biz|tv|cc)"
-    r"|t\.me/[^\s]+"
-    r"|telegram\.me/[^\s]+"
-    r"|wa\.me/[^\s]+"
-    r"|bit\.ly/[^\s]+"
-    r"|tinyurl\.com/[^\s]+"
-    r"|goo\.gl/[^\s]+"
+    r"(https?://\S+"
+    r"|www\.\S+"
+    r"|(?:[a-zA-Z0-9-]+\.)+(?:com|in|org|net|io|me|co|xyz|app|dev|info|biz|tv)"
+    r"|t\.me/\S+"
+    r"|telegram\.me/\S+"
+    r"|wa\.me/\S+"
+    r"|bit\.ly/\S+"
+    r"|tinyurl\.com/\S+"
     r"|@\w+)",
     re.IGNORECASE,
 )
 
-telegram_app = Application.builder().token(BOT_TOKEN).build()
+app_telegram = Application.builder().token(BOT_TOKEN).build()
 
 
+# /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "✅ Anti-Link Bot is working!"
     )
 
 
+# Anti-link system
 async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
+    if not update.message:
         return
+
+    text = update.message.text or ""
 
     try:
         member = await context.bot.get_chat_member(
             update.effective_chat.id,
-            update.effective_user.id,
+            update.effective_user.id
         )
 
-        # Owner/Admin ko allow karo
+        # Admin/Owner allowed
         if member.status in ["creator", "administrator"]:
             return
 
-# Link detect karo
-text = update.message.text or ""
+        has_link = False
 
-has_link = False
-
-# Regex check
-if LINK_PATTERN.search(text):
-    has_link = True
-
-# Telegram entities check
-if update.message.entities:
-    for entity in update.message.entities:
-        if entity.type in ["url", "text_link"]:
+        # Regex detection
+        if LINK_PATTERN.search(text):
             has_link = True
-            break
 
-if has_link:
-    print("LINK DETECTED:", text)
-    await update.message.delete()
-    print("MESSAGE DELETED")
+        # Telegram URL entities
+        if update.message.entities:
+            for entity in update.message.entities:
+                if entity.type in ["url", "text_link"]:
+                    has_link = True
+                    break
+
+        if has_link:
+            print("LINK DETECTED:", text)
+            await update.message.delete()
+            print("MESSAGE DELETED")
 
     except Exception as e:
         print("ERROR:", e)
 
 
-telegram_app.add_handler(CommandHandler("start", start))
+# Handlers
+app_telegram.add_handler(CommandHandler("start", start))
 
-telegram_app.add_handler(
+app_telegram.add_handler(
     MessageHandler(
         filters.TEXT & ~filters.COMMAND,
         anti_link
@@ -88,6 +90,7 @@ telegram_app.add_handler(
 )
 
 
+# Flask routes
 @app.route("/")
 def home():
     return "Anti-Link Bot is running!"
@@ -97,27 +100,43 @@ def home():
 def webhook():
     update = Update.de_json(
         request.get_json(force=True),
-        telegram_app.bot
+        app_telegram.bot
     )
 
     asyncio.run(
-        telegram_app.process_update(update)
+        app_telegram.process_update(update)
     )
 
     return "OK", 200
 
 
+# Main
 if __name__ == "__main__":
+
     async def setup():
-        await telegram_app.initialize()
-        await telegram_app.start()
+        await app_telegram.initialize()
+        await app_telegram.start()
 
         webhook_url = f"{RENDER_URL}/{BOT_TOKEN}"
-        await telegram_app.bot.set_webhook(webhook_url)
 
-        print(f"Webhook set: {webhook_url}")
+        await app_telegram.bot.set_webhook(
+            webhook_url
+        )
+
+        print(
+            f"Webhook set: {webhook_url}"
+        )
 
     asyncio.run(setup())
 
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    port = int(
+        os.environ.get(
+            "PORT",
+            10000
+        )
+    )
+
+    app.run(
+        host="0.0.0.0",
+        port=port
+    )
