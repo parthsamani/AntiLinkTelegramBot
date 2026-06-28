@@ -106,8 +106,12 @@ async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 telegram_app.add_handler(CommandHandler("start", start))
+
 telegram_app.add_handler(
-    MessageHandler(filters.TEXT & ~filters.COMMAND, anti_link)
+    MessageHandler(
+        filters.ALL & ~filters.COMMAND,
+        anti_link,
+    )
 )
 
 
