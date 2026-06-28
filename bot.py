@@ -54,7 +54,30 @@ async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Link detect hua to delete karo
-        if LINK_PATTERN.search(update.message.text):
+        text = update.message.text or ""
+
+# Telegram entities check karo
+has_link = False
+
+if update.message.entities:
+    for entity in update.message.entities:
+        if entity.type in [
+            "url",
+            "text_link",
+            "mention",
+            "phone_number"
+        ]:
+            has_link = True
+            break
+
+# Regex check
+if LINK_PATTERN.search(text):
+    has_link = True
+
+if has_link:
+    print("LINK DETECTED:", text)
+    await update.message.delete()
+    print("MESSAGE DELETED")
             print("LINK DETECTED")
             await update.message.delete()
             print("MESSAGE DELETED")
