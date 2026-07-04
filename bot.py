@@ -121,10 +121,6 @@ telegram_app.add_handler(
 )
 # ================= FLASK =================
 
-@app.route("/")
-def home():
-    return "Anti-Link Bot is running!"
-
 @app.route(
     f"/{BOT_TOKEN}",
     methods=["POST"],
@@ -136,10 +132,9 @@ def webhook():
         telegram_app.bot,
     )
 
-    asyncio.run(
-        telegram_app.process_update(
-            update
-        )
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(
+        telegram_app.process_update(update)
     )
 
     return "OK", 200
