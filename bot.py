@@ -1,6 +1,8 @@
 import os
 import re
 import asyncio
+import nest_asyncio
+nest_asyncio.apply()
 from flask import Flask, request
 from telegram import Update
 from telegram.ext import (
