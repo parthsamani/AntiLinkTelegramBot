@@ -1,8 +1,6 @@
 import os
 import re
 import asyncio
-import nest_asyncio
-nest_asyncio.apply()
 from flask import Flask, request
 from telegram import Update
 from telegram.ext import (
@@ -13,14 +11,11 @@ from telegram.ext import (
     filters,
 )
 
-# ================= CONFIG =================
-
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 
 app = Flask(__name__)
 
-# Universal link detector
 LINK_PATTERN = re.compile(
     r"("
     r"https?://\S+|"
@@ -38,14 +33,12 @@ LINK_PATTERN = re.compile(
 
 telegram_app = Application.builder().token(BOT_TOKEN).build()
 
-# ================= COMMANDS =================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "✅ Anti-Link Bot is working!"
     )
 
-# ================= ANTI LINK =================
 
 async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -65,20 +58,20 @@ async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update.effective_user.id,
         )
 
-        # Admin/Owner allowed
-        if member.status in [
+        if member.status in (
             "creator",
             "administrator",
-        ]:
+        ):
             return
 
         has_link = False
 
-        # Telegram entities
         entities = []
 
         if update.message.entities:
-            entities.extend(update.message.entities)
+            entities.extend(
+                update.message.entities
+            )
 
         if update.message.caption_entities:
             entities.extend(
@@ -86,63 +79,79 @@ async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
         for entity in entities:
-            if entity.type in [
-    "url",
-    "text_link",
-]:
+            if entity.type in (
+                "url",
+                "text_link",
+            ):
                 has_link = True
                 break
 
-        # Regex check
         if LINK_PATTERN.search(text):
             has_link = True
 
         if has_link:
             print(
-                "DELETING:",
+                "DELETE:",
                 update.effective_user.id,
                 text,
             )
 
             await update.message.delete()
 
-            print("DELETED")
-
     except Exception as e:
-        print("ERROR:", e)
+        print(
+            "ERROR:",
+            e,
+        )
 
-# ================= HANDLERS =================
+
+telegram_app.add_handler(
+    CommandHandler(
+        "start",
+        start,
+    )
+)
 
 telegram_app.add_handler(
     MessageHandler(
-        filters.TEXT & ~filters.COMMAND,
+        filters.TEXT
+        & ~filters.COMMAND,
         anti_link,
     )
 )
-# ================= FLASK =================
+
+
+@app.route("/")
+def home():
+    return "Bot Running"
+
 
 @app.route(
     f"/{BOT_TOKEN}",
     methods=["POST"],
 )
-def webhook():
+async def webhook():
+
+    data = request.get_json(
+        force=True
+    )
 
     update = Update.de_json(
-        request.get_json(force=True),
+        data,
         telegram_app.bot,
     )
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(
-        telegram_app.process_update(update)
+    await telegram_app.process_update(
+        update
     )
 
     return "OK", 200
 
-# ================= MAIN =================
 
-async def setup():
+async def startup():
+
     await telegram_app.initialize()
+
     await telegram_app.start()
 
     webhook_url = (
@@ -158,9 +167,12 @@ async def setup():
         webhook_url,
     )
 
+
 if __name__ == "__main__":
 
-    asyncio.run(setup())
+    asyncio.run(
+        startup()
+    )
 
     port = int(
         os.environ.get(
