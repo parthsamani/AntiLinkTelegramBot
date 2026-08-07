@@ -29,7 +29,9 @@ async def delete_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message or update.edited_message
     if not msg or await is_admin(update, context): return
     if has_link(update):
-        try: await msg.delete()
+        try: 
+            await msg.delete()
+            logging.info(f"Deleted link from {msg.from_user.id}")
         except Exception as e: logging.error(e)
 
 async def post_init(app):
@@ -38,12 +40,13 @@ async def post_init(app):
 
 app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
 app.add_handler(CommandHandler("start", lambda u,c: u.message.reply_text("✅ Anti-Link ON")))
+
+# YE LINE CHANGE KI: filters.ALL se new + edited dono cover ho jayega
 app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, delete_handler))
-app.add_handler(MessageHandler(filters.UPDATE_TYPE.EDITED_MESSAGE, delete_handler))
 
 if __name__ == "__main__":
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        url_path=BOT_TOKEN # important for PTB 22
+        url_path=BOT_TOKEN
     )
