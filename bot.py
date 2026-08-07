@@ -1,6 +1,7 @@
 import os
 import re
 import logging
+import asyncio
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
@@ -35,18 +36,20 @@ async def delete_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e: logging.error(e)
 
 async def post_init(app):
-    await app.bot.set_webhook(WEBHOOK_URL)
+    await app.bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
     logging.info(f"Webhook set: {WEBHOOK_URL}")
 
-app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
-app.add_handler(CommandHandler("start", lambda u,c: u.message.reply_text("✅ Anti-Link ON")))
-
-# YE LINE CHANGE KI: filters.ALL se new + edited dono cover ho jayega
-app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, delete_handler))
-
-if __name__ == "__main__":
-    app.run_webhook(
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
+    app.add_handler(CommandHandler("start", lambda u,c: u.message.reply_text("✅ Anti-Link ON")))
+    app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, delete_handler))
+    
+    await app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        url_path=BOT_TOKEN
+        url_path=BOT_TOKEN,
+        webhook_url=WEBHOOK_URL
     )
+
+if __name__ == "__main__":
+    asyncio
