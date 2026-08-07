@@ -1,11 +1,10 @@
 import os
 import re
 import logging
-import asyncio
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 PORT = int(os.environ.get("PORT", 10000))
 WEBHOOK_URL = os.environ["RENDER_EXTERNAL_URL"] + "/" + BOT_TOKEN
@@ -28,28 +27,32 @@ def has_link(update: Update):
 
 async def delete_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message or update.edited_message
-    if not msg or await is_admin(update, context): return
+    if not msg: return
+    if await is_admin(update, context): return
     if has_link(update):
         try: 
             await msg.delete()
             logging.info(f"Deleted link from {msg.from_user.id}")
-        except Exception as e: logging.error(e)
+        except Exception as e: logging.error(f"Delete failed: {e}")
 
-async def post_init(app):
-    await app.bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
-    logging.info(f"Webhook set: {WEBHOOK_URL}")
+async def post_init(application):
+    await application.bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
+    logging.info(f"Webhook set to {WEBHOOK_URL}")
 
-async def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
-    app.add_handler(CommandHandler("start", lambda u,c: u.message.reply_text("✅ Anti-Link ON")))
-    app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, delete_handler))
+def main():
+    application = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
     
-    await app.run_webhook(
+    application.add_handler(CommandHandler("start", lambda u,c: u.message.reply_text("✅ Anti-Link Bot LIVE")))
+    application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, delete_handler))
+    
+    # PTB 22.2 ke liye yehi sahi tareeka hai Render par
+    application.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         url_path=BOT_TOKEN,
-        webhook_url=WEBHOOK_URL
+        webhook_url=WEBHOOK_URL,
+        drop_pending_updates=True
     )
 
 if __name__ == "__main__":
-    asyncio
+    main() # asyncio.run hata diya
