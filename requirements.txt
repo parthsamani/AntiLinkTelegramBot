@@ -1,1 +1,4 @@
-python-telegram-bot==20.7
+requirements.txt mai yeh hai 
+python-telegram-bot==22.2
+flask==3.0.3
+asgiref==3.8.1
