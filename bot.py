@@ -1,187 +1,404 @@
+import asyncio
+import logging
 import os
 import re
-import asyncio
-from flask import Flask, request
-from telegram import Update
+import threading
+
+from flask import Flask
+from telegram import Update, MessageEntity
+from telegram.constants import ChatMemberStatus
+from telegram.error import BadRequest, Forbidden, TelegramError
 from telegram.ext import (
     Application,
     CommandHandler,
-    MessageHandler,
     ContextTypes,
+    MessageHandler,
     filters,
 )
 
+
+# ==========================================================
+# CONFIGURATION
+# ==========================================================
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 
-app = Flask(__name__)
+if not BOT_TOKEN:
+    raise ValueError(
+        "BOT_TOKEN environment variable is missing"
+    )
 
-LINK_PATTERN = re.compile(
-    r"("
-    r"https?://\S+|"
-    r"www\.\S+|"
-    r"(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}|"
-    r"t\.me/\S+|"
-    r"telegram\.me/\S+|"
-    r"wa\.me/\S+|"
-    r"bit\.ly/\S+|"
-    r"tinyurl\.com/\S+|"
-    r"@\w+"
-    r")",
-    re.IGNORECASE,
+
+# ==========================================================
+# LOGGING
+# ==========================================================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
 )
 
-telegram_app = Application.builder().token(BOT_TOKEN).build()
+logger = logging.getLogger("RemoveHyperlinkBot")
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "✅ Anti-Link Bot is working!"
+# ==========================================================
+# FLASK SERVER FOR RENDER
+# ==========================================================
+
+web_app = Flask(__name__)
+
+
+@web_app.route("/")
+def home():
+    return "Remove Hyperlink Bot is running!"
+
+
+@web_app.route("/health")
+def health():
+    return "OK", 200
+
+
+def run_web_server():
+
+    port = int(
+        os.environ.get("PORT", "10000")
+    )
+
+    web_app.run(
+        host="0.0.0.0",
+        port=port,
+        debug=False,
+        use_reloader=False
     )
 
 
-async def anti_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ==========================================================
+# URL DETECTION
+# ==========================================================
 
-    if not update.message:
-        return
+URL_PATTERN = re.compile(
+    r"(?i)"
+    r"("
+    r"(?:https?://|ftp://|www\.)"
+    r"[^\s<>()]+"
+    r"|"
+    r"(?:[a-z0-9-]+\.)+"
+    r"(?:com|net|org|in|io|co|me|info|biz|xyz|site|online|app|dev|ai|"
+    r"co\.in|org\.in|net\.in|t\.me)"
+    r"(?:/[^\s<>()]*)?"
+    r")"
+)
 
-    text = (
-        update.message.text
-        or update.message.caption
-        or ""
-    )
+
+def has_url(text: str) -> bool:
+
+    if not text:
+        return False
+
+    return bool(URL_PATTERN.search(text))
+
+
+def has_url_entity(
+    message_text: str,
+    entities
+) -> bool:
+
+    if not message_text or not entities:
+        return False
+
+    for entity in entities:
+
+        if entity.type in (
+            MessageEntity.URL,
+            MessageEntity.TEXT_LINK
+        ):
+            return True
+
+    return False
+
+
+def message_contains_hyperlink(
+    message
+) -> bool:
+
+    # Normal text
+    if message.text:
+
+        if has_url(message.text):
+            return True
+
+        if has_url_entity(
+            message.text,
+            message.entities
+        ):
+            return True
+
+    # Media captions
+    if message.caption:
+
+        if has_url(message.caption):
+            return True
+
+        if has_url_entity(
+            message.caption,
+            message.caption_entities
+        ):
+            return True
+
+    return False
+
+
+# ==========================================================
+# ADMIN CHECK
+# ==========================================================
+
+async def is_admin(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+) -> bool:
+
+    message = update.effective_message
+    user = update.effective_user
+    chat = update.effective_chat
+
+    if not message or not user or not chat:
+        return False
+
+    # Private chat
+    if chat.type == "private":
+        return True
 
     try:
 
         member = await context.bot.get_chat_member(
-            update.effective_chat.id,
-            update.effective_user.id,
+            chat_id=chat.id,
+            user_id=user.id
         )
 
-        if member.status in (
-            "creator",
-            "administrator",
-        ):
-            return
+        return member.status in (
+            ChatMemberStatus.OWNER,
+            ChatMemberStatus.ADMINISTRATOR
+        )
 
-        has_link = False
+    except TelegramError as error:
 
-        entities = []
+        logger.warning(
+            "Admin check error: %s",
+            error
+        )
 
-        if update.message.entities:
-            entities.extend(
-                update.message.entities
-            )
+        return False
 
-        if update.message.caption_entities:
-            entities.extend(
-                update.message.caption_entities
-            )
 
-        for entity in entities:
-            if entity.type in (
-                "url",
-                "text_link",
-            ):
-                has_link = True
-                break
+# ==========================================================
+# DELETE HYPERLINK MESSAGE
+# ==========================================================
 
-        if LINK_PATTERN.search(text):
-            has_link = True
+async def remove_hyperlink(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
-        if has_link:
-            print(
-                "DELETE:",
-                update.effective_user.id,
-                text,
-            )
+    message = update.effective_message
 
-            await update.message.delete()
+    if not message:
+        return
 
-    except Exception as e:
-        print(
-            "ERROR:",
-            e,
+    # Only groups and supergroups
+    if message.chat.type not in (
+        "group",
+        "supergroup"
+    ):
+        return
+
+    # Ignore bot messages
+    if message.from_user and message.from_user.is_bot:
+        return
+
+    # Admin messages are exempted
+    if await is_admin(update, context):
+        return
+
+    # Check hyperlink
+    if not message_contains_hyperlink(message):
+        return
+
+    try:
+
+        await message.delete()
+
+        username = (
+            message.from_user.username
+            if message.from_user
+            else "unknown"
+        )
+
+        logger.info(
+            "Deleted hyperlink message | "
+            "Chat: %s | User: %s",
+            message.chat.id,
+            username
+        )
+
+    except Forbidden:
+
+        logger.error(
+            "Cannot delete message. "
+            "Make the bot an admin and enable "
+            "'Delete Messages' permission."
+        )
+
+    except BadRequest as error:
+
+        logger.error(
+            "Telegram delete error: %s",
+            error
+        )
+
+    except TelegramError as error:
+
+        logger.error(
+            "Unexpected Telegram error: %s",
+            error
         )
 
 
-telegram_app.add_handler(
-    CommandHandler(
-        "start",
-        start,
-    )
-)
+# ==========================================================
+# /START COMMAND
+# ==========================================================
 
-telegram_app.add_handler(
-    MessageHandler(
-        filters.TEXT
-        & ~filters.COMMAND,
-        anti_link,
-    )
-)
+async def start_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
 
-
-@app.route("/")
-def home():
-    return "Bot Running"
-
-
-@app.route(
-    f"/{BOT_TOKEN}",
-    methods=["POST"],
-)
-async def webhook():
-
-    data = request.get_json(
-        force=True
+    text = (
+        "🔗 <b>Remove Hyperlink Bot</b>\n\n"
+        "This bot automatically removes messages "
+        "containing website URLs from groups.\n\n"
+        "✅ Admin messages are exempted\n"
+        "🔒 Regular members' URL messages are removed\n\n"
+        "<b>Setup:</b>\n"
+        "1. Add the bot to your group\n"
+        "2. Promote it as Admin\n"
+        "3. Enable <b>Delete Messages</b>\n"
+        "4. Done!"
     )
 
-    update = Update.de_json(
-        data,
-        telegram_app.bot,
+    await update.effective_message.reply_text(
+        text,
+        parse_mode="HTML"
     )
 
-    await telegram_app.process_update(
-        update
+
+# ==========================================================
+# /HELP COMMAND
+# ==========================================================
+
+async def help_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+
+    text = (
+        "🔗 <b>Remove Hyperlink Bot</b>\n\n"
+        "The bot automatically deletes:\n"
+        "• Website URLs\n"
+        "• www links\n"
+        "• Hidden hyperlinks\n"
+        "• URLs in captions\n"
+        "• Edited messages containing links\n\n"
+        "👑 Messages sent by group admins "
+        "are not deleted."
     )
 
-    return "OK", 200
-
-
-async def startup():
-
-    await telegram_app.initialize()
-
-    await telegram_app.start()
-
-    webhook_url = (
-        f"{RENDER_URL}/{BOT_TOKEN}"
+    await update.effective_message.reply_text(
+        text,
+        parse_mode="HTML"
     )
 
-    await telegram_app.bot.set_webhook(
-        webhook_url
+
+# ==========================================================
+# MAIN
+# ==========================================================
+
+def main():
+
+    # Fix for Python 3.14 event loop behavior
+    try:
+
+        asyncio.get_event_loop()
+
+    except RuntimeError:
+
+        asyncio.set_event_loop(
+            asyncio.new_event_loop()
+        )
+
+    # Start Render web server
+    web_thread = threading.Thread(
+        target=run_web_server,
+        daemon=True
     )
 
-    print(
-        "Webhook:",
-        webhook_url,
+    web_thread.start()
+
+    logger.info(
+        "Render web server started"
     )
 
+    # Create Telegram application
+    app = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .build()
+    )
+
+    # Commands
+    app.add_handler(
+        CommandHandler(
+            "start",
+            start_command
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
+            "help",
+            help_command
+        )
+    )
+
+    # New messages
+    app.add_handler(
+        MessageHandler(
+            filters.ALL & ~filters.COMMAND,
+            remove_hyperlink
+        )
+    )
+
+    # Edited messages
+    app.add_handler(
+        MessageHandler(
+            filters.UpdateType.EDITED_MESSAGE,
+            remove_hyperlink
+        )
+    )
+
+    logger.info(
+        "Remove Hyperlink Bot Started Successfully"
+    )
+
+    # Run Telegram bot
+    app.run_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=False
+    )
+
+
+# ==========================================================
+# RUN
+# ==========================================================
 
 if __name__ == "__main__":
-
-    asyncio.run(
-        startup()
-    )
-
-    port = int(
-        os.environ.get(
-            "PORT",
-            10000,
-        )
-    )
-
-    app.run(
-        host="0.0.0.0",
-        port=port,
-    )
+    main()
